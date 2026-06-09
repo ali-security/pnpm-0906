@@ -172,6 +172,7 @@ export interface ResolutionContext {
   workspacePackages?: WorkspacePackages
   missingPeersOfChildrenByPkgId: Record<PkgResolutionId, { depth: number, missingPeersOfChildren: MissingPeersOfChildren }>
   hoistPeers?: boolean
+  blockExoticSubdeps?: boolean
 }
 
 export type MissingPeers = Record<string, { range: string, optional: boolean }>
@@ -1350,6 +1351,22 @@ async function resolveDependency (
     },
   })
 
+  // Check if exotic dependencies are disallowed in subdependencies
+  if (
+    ctx.blockExoticSubdeps &&
+    options.currentDepth > 0 &&
+    pkgResponse.body.resolvedVia != null && // This is already coming from the lockfile, we skip the check in this case for now. Should be fixed later.
+    isExoticDep(pkgResponse.body.resolvedVia)
+  ) {
+    const error = new PnpmError(
+      'EXOTIC_SUBDEP',
+      `Exotic dependency "${wantedDependency.alias ?? wantedDependency.bareSpecifier}" (resolved via ${pkgResponse.body.resolvedVia}) is not allowed in subdependencies when blockExoticSubdeps is enabled`
+    )
+    error.prefix = options.prefix
+    error.pkgsStack = getPkgsInfoFromIds(options.parentIds, ctx.resolvedPkgsById)
+    throw error
+  }
+
   if (ctx.allPreferredVersions && pkgResponse.body.manifest?.version) {
     if (!ctx.allPreferredVersions[pkgResponse.body.manifest.name]) {
       ctx.allPreferredVersions[pkgResponse.body.manifest.name] = {}
@@ -1729,4 +1746,19 @@ function getCatalogExistingVersionFromSnapshot (
   return existingCatalogResolution?.specifier === catalogLookup.specifier
     ? existingCatalogResolution.version
     : undefined
+}
+
+const NON_EXOTIC_RESOLVED_VIA = new Set([
+  'custom-resolver',
+  'github.com/denoland/deno',
+  'github.com/oven-sh/bun',
+  'jsr-registry',
+  'local-filesystem',
+  'nodejs.org',
+  'npm-registry',
+  'workspace',
+])
+
+function isExoticDep (resolvedVia: string): boolean {
+  return !NON_EXOTIC_RESOLVED_VIA.has(resolvedVia)
 }

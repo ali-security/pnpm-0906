@@ -164,6 +164,7 @@ export interface StrictInstallOptions {
   returnListOfDepsRequiringBuild?: boolean
   injectWorkspacePackages?: boolean
   ci?: boolean
+  blockExoticSubdeps?: boolean
 }
 
 export type InstallOptions =
@@ -262,6 +263,7 @@ const defaults = (opts: InstallOptions): StrictInstallOptions => {
     excludeLinksFromLockfile: false,
     virtualStoreDirMaxLength: 120,
     peersSuffixMaxLength: 1000,
+    blockExoticSubdeps: true,
   } as StrictInstallOptions
 }
 
